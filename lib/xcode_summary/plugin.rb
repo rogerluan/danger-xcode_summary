@@ -114,18 +114,34 @@ module Danger
     # Reads a `.xcresult` and reports its warning and error count.
     #
     # @param    [String] file_path Path for xcresult bundle.
-    # @return   [String] JSON string with warningCount and errorCount
+    # @return   [String] JSON string with "warnings" and "errors" keys.
     def warning_error_count(file_path)
+      objects = warnings_and_errors(file_path)
+      warnings = objects[:warnings].count
+      errors = objects[:errors].count
+      result = { warnings: warnings, errors: errors }
+      result.to_json
+    end
+
+    # Reads a `.xcresult` and reports its warnings and errors.
+    #
+    # @param    [String] file_path Path for xcresult bundle.
+    # @return   [Hash] Hash with :warnings and :errors keys.
+    def warnings_and_errors(file_path)
       if File.exist?(file_path)
         xcode_summary = XCResult::Parser.new(path: file_path)
-        warning_count = 0
-        error_count = 0
+        warnings = []
+        errors = []
         xcode_summary.actions_invocation_record.actions.each do |action|
-          warning_count += warnings(action).count
-          error_count += errors(action).count
+          warnings << warnings(action)
+          errors << errors(action)
         end
-        result = { warnings: warning_count, errors: error_count }
-        result.to_json
+        warnings.flatten!
+        errors.flatten!
+        # Unfortunately `flatten` doesn't seem to be working on these Enumerators 🤷‍♂️
+        warnings = warnings.map { |warning_enumerators| warning_enumerators.map { |warning| warning } }.flatten
+        errors = errors.map { |error_enumerators| error_enumerators.map { |error| error } }.flatten
+        { warnings: warnings, errors: errors }
       else
         fail 'summary file not found'
       end
